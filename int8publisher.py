@@ -1,3 +1,7 @@
+# This application simply sends an int8 array to the the /drive ros channel.
+# Synchronous.py reads this channel and drives a sphero RVR accordingly, where arr[0] and arr[1] are the normalized
+# left and right tank controls respectively.
+
 import rclpy
 from rclpy.node import Node
 

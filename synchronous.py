@@ -57,22 +57,15 @@ class rvrNode(Node):
 
     def listener_callback(self, msg):
         if debug: print("heard")
-        # motor code here
 
         drive_data = msg.data
 
-        # separate left motor and right motor
-        right_drive = drive_data[1]
-        left_drive = drive_data[0]
-
         rvr.drive_tank_normalized(
-            left_velocity=left_drive,
-            right_velocity=right_drive
+            left_velocity=drive_data[0],    # left motor control
+            right_velocity=drive_data[1]    # right motor control
         )
 
-        print(str(left_drive) + str(right_drive))
-
-        print(str(drive_data))
+        if debug: print(str(drive_data))
 
 
 rclpy.init(args=None)
@@ -92,15 +85,13 @@ def checkData():
                     **encoder_global
             })
         )
-        if debug: print("spinning")
-        #rclpy.spin_once(ros, timeout_sec=0.01)
-        if debug: print('publish')
+        #if debug: print('publish')
 
 
 
 def imu_handler(imu_data):
     #print('IMU data response: ', imu_data)
-    if debug: print('IMU data received')
+    #if debug: print('IMU data received')
     global imu_global
     global received
     imu_global = imu_data
@@ -111,7 +102,7 @@ def imu_handler(imu_data):
 
 def color_detected_handler(color_detected_data):
     #print('Color detection data response: ', color_detected_data)
-    if debug: print('Color detection data received')
+    #if debug: print('Color detection data received')
     global color_global
     global received
     color_global = color_detected_data
@@ -122,7 +113,7 @@ def color_detected_handler(color_detected_data):
 
 def accelerometer_handler(accelerometer_data):
     #print('Accelerometer data response: ', accelerometer_data)
-    if debug: print('Accelerometer data received')
+    #if debug: print('Accelerometer data received')
     global accelerometer_global
     global received
     accelerometer_global = accelerometer_data
@@ -133,7 +124,7 @@ def accelerometer_handler(accelerometer_data):
 
 def ambient_light_handler(ambient_light_data):
     #print('Ambient light data response: ', ambient_light_data)
-    if debug: print('Ambient light data received')
+    #if debug: print('Ambient light data received')
     global ambient_global
     global received
     ambient_global = ambient_light_data
@@ -143,13 +134,17 @@ def ambient_light_handler(ambient_light_data):
 
 def encoder_handler(encoder_data):
     #print('Encoder data response: ', encoder_data)
-    if debug: print('Encoder data received')
+    #if debug: print('Encoder data received')
     global encoder_global
     global received
     encoder_global = encoder_data
     received = received | (1 << 4)
     #print(received)
     checkData()
+
+def will_sleep_handler():
+    if debug: print("RVR going to sleep - sending wake signal")
+    rvr.wake()
 
 def main():
     """ This program demonstrates how to enable multiple sensors to stream.
@@ -161,37 +156,47 @@ def main():
         # Give RVR time to wake up
         time.sleep(2)
 
-        if debug: print("Starting imu handler")
+        if debug: print("Starting imu handler...")
         rvr.sensor_control.add_sensor_data_handler(
             service=RvrStreamingServices.imu,
             handler=imu_handler
         )
-        if debug: print("Starting color handler")
+        if debug: print("Starting color handler...")
         rvr.sensor_control.add_sensor_data_handler(
             service=RvrStreamingServices.color_detection,
             handler=color_detected_handler
         )
-        if debug: print("Starting accelerometer handler")
+        if debug: print("Starting accelerometer handler...")
         rvr.sensor_control.add_sensor_data_handler(
             service=RvrStreamingServices.accelerometer,
             handler=accelerometer_handler
         )
-        if debug: print("Starting ambient light handler")
+        if debug: print("Starting ambient light handler...")
         rvr.sensor_control.add_sensor_data_handler(
             service=RvrStreamingServices.ambient_light,
             handler=ambient_light_handler
         )
-        if debug: print("Starting encoder handler")
+        if debug: print("Starting encoder handler...")
         rvr.sensor_control.add_sensor_data_handler(
             service=RvrStreamingServices.encoders,
             handler=encoder_handler
         )
-        if debug: print("Starting sensor control")
+        if debug: print("Starting sensor control...")
 
         #await rvr.sensor_control.start(interval=250)
         rvr.sensor_control.start(interval=1000)
 
-        rclpy.spin(ros)
+        if debug: print("Starting keep awake...")
+        rvr.on_will_sleep_notify(will_sleep_handler)
+
+        #TODO: Battery state handler
+
+
+        #TODO:
+
+        while True:
+            rclpy.spin_once(ros)
+
 
     except KeyboardInterrupt:
         print('\nProgram terminated with keyboard interrupt.')
