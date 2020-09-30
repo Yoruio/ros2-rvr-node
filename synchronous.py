@@ -2,8 +2,7 @@ import os
 import sys
 
 import asyncio
-from sphero_sdk import SpheroRvrAsync
-from sphero_sdk import SerialAsyncDal
+from sphero_sdk import SpheroRvrObserver
 from sphero_sdk import RvrStreamingServices
 
 import rclpy
@@ -19,14 +18,7 @@ import json
 
 debug = True
 
-
-loop = asyncio.get_event_loop()
-
-rvr = SpheroRvrAsync(
-    dal=SerialAsyncDal(
-        loop
-    )
-)
+rvr = SpheroRvrObserver()
 
 # sensor variable initialization
 imu_global = {}
@@ -41,7 +33,7 @@ received = 0x00     # received byte - fully received at 0x1f
 
 
 # sensor publisher
-class MinimalPublisher(Node):
+class rvrNode(Node):
 
     def __init__(self):
         super().__init__('sphero_node')
@@ -73,27 +65,25 @@ class MinimalPublisher(Node):
         right_drive = drive_data[1]
         left_drive = drive_data[0]
 
+        rvr.drive_tank_normalized(
+            left_velocity=left_drive,
+            right_velocity=right_drive
+        )
 
         print(str(left_drive) + str(right_drive))
 
         print(str(drive_data))
 
-        #asyncio.get_event_loop().run_until_complete(
-        #    rvr.drive_tank_normalized(
-        #        left_velocity=left_drive,
-        #        right_velocity=right_drive
-        #    )
-        #)
 
 rclpy.init(args=None)
-publisher = MinimalPublisher()
+ros = rvrNode()
 
 # Check if all values are collected
 def checkData():
     global received
     if received == 31:
         received = 0
-        publisher.send(
+        ros.send(
             json.dumps({
                     **imu_global,
                     **color_global,
@@ -103,12 +93,12 @@ def checkData():
             })
         )
         if debug: print("spinning")
-        rclpy.spin_once(publisher, timeout_sec=0.01)
+        #rclpy.spin_once(ros, timeout_sec=0.01)
         if debug: print('publish')
 
 
 
-async def imu_handler(imu_data):
+def imu_handler(imu_data):
     #print('IMU data response: ', imu_data)
     if debug: print('IMU data received')
     global imu_global
@@ -119,7 +109,7 @@ async def imu_handler(imu_data):
     checkData()
 
 
-async def color_detected_handler(color_detected_data):
+def color_detected_handler(color_detected_data):
     #print('Color detection data response: ', color_detected_data)
     if debug: print('Color detection data received')
     global color_global
@@ -130,7 +120,7 @@ async def color_detected_handler(color_detected_data):
     checkData()
 
 
-async def accelerometer_handler(accelerometer_data):
+def accelerometer_handler(accelerometer_data):
     #print('Accelerometer data response: ', accelerometer_data)
     if debug: print('Accelerometer data received')
     global accelerometer_global
@@ -141,7 +131,7 @@ async def accelerometer_handler(accelerometer_data):
     checkData()
 
 
-async def ambient_light_handler(ambient_light_data):
+def ambient_light_handler(ambient_light_data):
     #print('Ambient light data response: ', ambient_light_data)
     if debug: print('Ambient light data received')
     global ambient_global
@@ -151,7 +141,7 @@ async def ambient_light_handler(ambient_light_data):
     #print(received)
     checkData()
 
-async def encoder_handler(encoder_data):
+def encoder_handler(encoder_data):
     #print('Encoder data response: ', encoder_data)
     if debug: print('Encoder data received')
     global encoder_global
@@ -161,55 +151,58 @@ async def encoder_handler(encoder_data):
     #print(received)
     checkData()
 
-async def spin_ros():
-    while True:
-        if debug: print("~~~~~LISTENING~~~~~")
-        await rclpy.spin_once(publisher)
-        if debug: print("~~~~~HEARD~~~~~")
-
-
-async def main():
+def main():
     """ This program demonstrates how to enable multiple sensors to stream.
     """
 
-    await rvr.wake()
+    try:
+        rvr.wake()
 
-    # Give RVR time to wake up
-    await asyncio.sleep(2)
+        # Give RVR time to wake up
+        time.sleep(2)
 
-    if debug: print("Starting imu handler")
-    await rvr.sensor_control.add_sensor_data_handler(
-        service=RvrStreamingServices.imu,
-        handler=imu_handler
-    )
-    if debug: print("Starting color handler")
-    await rvr.sensor_control.add_sensor_data_handler(
-        service=RvrStreamingServices.color_detection,
-        handler=color_detected_handler
-    )
-    if debug: print("Starting accelerometer handler")
-    await rvr.sensor_control.add_sensor_data_handler(
-        service=RvrStreamingServices.accelerometer,
-        handler=accelerometer_handler
-    )
-    if debug: print("Starting ambient light handler")
-    await rvr.sensor_control.add_sensor_data_handler(
-        service=RvrStreamingServices.ambient_light,
-        handler=ambient_light_handler
-    )
-    if debug: print("Starting encoder handler")
-    await rvr.sensor_control.add_sensor_data_handler(
-        service=RvrStreamingServices.encoders,
-        handler=encoder_handler
-    )
-    if debug: print("Starting sensor control")
+        if debug: print("Starting imu handler")
+        rvr.sensor_control.add_sensor_data_handler(
+            service=RvrStreamingServices.imu,
+            handler=imu_handler
+        )
+        if debug: print("Starting color handler")
+        rvr.sensor_control.add_sensor_data_handler(
+            service=RvrStreamingServices.color_detection,
+            handler=color_detected_handler
+        )
+        if debug: print("Starting accelerometer handler")
+        rvr.sensor_control.add_sensor_data_handler(
+            service=RvrStreamingServices.accelerometer,
+            handler=accelerometer_handler
+        )
+        if debug: print("Starting ambient light handler")
+        rvr.sensor_control.add_sensor_data_handler(
+            service=RvrStreamingServices.ambient_light,
+            handler=ambient_light_handler
+        )
+        if debug: print("Starting encoder handler")
+        rvr.sensor_control.add_sensor_data_handler(
+            service=RvrStreamingServices.encoders,
+            handler=encoder_handler
+        )
+        if debug: print("Starting sensor control")
 
-    #await rvr.sensor_control.start(interval=250)
-    await rvr.sensor_control.start(interval=1000)
+        #await rvr.sensor_control.start(interval=250)
+        rvr.sensor_control.start(interval=1000)
 
-    if debug: print("Ros listener spinning up")
-    #await spin_ros()
-    if debug: print("spin complete")
+        rclpy.spin(ros)
+
+    except KeyboardInterrupt:
+        print('\nProgram terminated with keyboard interrupt.')
+
+    finally:
+        rvr.sensor_control.clear()
+
+        # Delay to allow RVR issue command before closing
+        time.sleep(.5)
+
+        rvr.close()
 
 
 
@@ -217,23 +210,4 @@ async def main():
 
 
 if __name__ == '__main__':
-    try:
-
-        asyncio.ensure_future(
-            main()
-        )
-        loop.run_forever()
-
-    except KeyboardInterrupt:
-        print('\nProgram terminated with keyboard interrupt.')
-
-        loop.run_until_complete(
-            asyncio.gather(
-                rvr.sensor_control.clear(),
-                rvr.close()
-            )
-        )
-
-    finally:
-        if loop.is_running():
-            loop.close()
+    main()
