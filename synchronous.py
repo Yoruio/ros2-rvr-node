@@ -39,7 +39,7 @@ class rvrNode(Node):
         super().__init__('sphero_node')
         self.publisher_ = self.create_publisher(
             String,
-            'chatter',  # publish to chatter channel
+            'sensors',  # publish to sensorsr channel
             10)
 
         self.subscription = self.create_subscription(
